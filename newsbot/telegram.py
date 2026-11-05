@@ -1,88 +1,141 @@
-# =====================================================================
-#  My Curated News - settings
-#  You can edit this file in the GitHub website (click the pencil icon).
-#  Lines starting with # are notes and are ignored.
-# =====================================================================
+"""Telegram digest: sends only stories that were not sent before (delta), grouped by section.
 
-settings:
-  # How many hours a story stays on the page after its last update
-  keep_hours: 72
-  # Most new articles handled in one run (keeps AI usage low)
-  max_new_items_per_run: 200
-  # How many articles go to the AI in one request (smaller = fewer AI timeouts)
-  llm_batch_size: 25
-  # A story counts as "trending" when this many different sources cover it
-  trending_min_sources: 3
+Does nothing if the bot token or chat ID is not set (and says so in the log).
+"""
+import datetime as dt
+import html
+import os
+import re
+import time
 
-  # AI models, tried in this order. If one fails or hits its limit, the next is used.
-  # Each provider is only used if its key is set in GitHub Secrets.
-  llm:
-    gemini:   [gemini-flash-latest, gemini-flash-lite-latest]   # key: GEMINI_API_KEY
-    groq:     [llama-3.3-70b-versatile, openai/gpt-oss-120b]   # key: GROQ_API_KEY (optional)
-    openrouter: [openrouter/free]                               # key: OPENROUTER_API_KEY (optional)
+import requests
 
-  telegram:
-    # Every run sends one digest with only the stories not sent before.
-    # Only stories first seen in the last this-many hours are considered.
-    window_hours: 16
-    # Show a 2-line brief and a source link under each headline (false = headlines only)
-    show_brief: true
-    # Most stories in one digest
-    max_total: 27
-    # Most stories per section
-    caps:
-      karnataka: 8
-      tamil_nadu: 5
-      india: 6
-      tech_business: 4
-      international: 4
+IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+MAX_MESSAGE = 3900  # Telegram allows 4096 characters per message; keep a safety margin
 
-# =====================================================================
-#  Sources
-#  type:     rss | google_news | inshorts | reddit | hackernews
-#  section:  news | biz | ai   (ai items are split into AI Buzz and AI Hacks)
-#  state:    optional hint - KA TN IN WORLD
-#  lang:     for google_news - en kn ta te ml
-#  category: for inshorts - national, business, world, technology (leave out for top news)
-#
-#  Telangana, Andhra Pradesh and Kerala feeds were removed on purpose.
-#  Very big news from those states still arrives through the national feeds.
-#  Sports is filtered out in the code.
-# =====================================================================
+# (heading, cap key in config, default cap, rule that picks the stories)
+SECTIONS = [
+    ("Karnataka", "karnataka", 8,
+     lambda s: s["section"] == "news" and s.get("state") == "KA"),
+    ("Tamil Nadu", "tamil_nadu", 5,
+     lambda s: s["section"] == "news" and s.get("state") == "TN"),
+    ("India", "india", 6,
+     lambda s: s["section"] == "news" and s.get("state") in (None, "IN", "TG", "AP", "KL")),
+    ("Tech & Business", "tech_business", 4,
+     lambda s: s["section"] in ("biz", "ai_buzz")),
+    ("International", "international", 4,
+     lambda s: s["section"] == "news" and s.get("state") == "WORLD"),
+]
 
-sources:
-  # ---------- National ----------
-  - {name: Google News India, type: google_news, lang: en, section: news, state: IN}
-  - {name: Inshorts, type: inshorts, section: news}
-  - {name: Inshorts National, type: inshorts, category: national, section: news, state: IN}
 
-  # ---------- Karnataka ----------
-  - {name: GN Karnataka, type: google_news, lang: en, query: "Karnataka OR Bengaluru OR Mysuru OR Mangaluru when:1d", section: news, state: KA}
-  - {name: GN Kannada, type: google_news, lang: kn, section: news, state: KA}
-  - {name: The Hindu Karnataka, type: rss, url: "https://www.thehindu.com/news/national/karnataka/feeder/default.rss", section: news, state: KA}
-  - {name: Deccan Herald, type: google_news, lang: en, query: "site:deccanherald.com when:1d", section: news, state: KA}
-  - {name: Prajavani, type: google_news, lang: kn, query: "site:prajavani.net when:1d", section: news, state: KA}
+def _send(text, log):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                          json={"chat_id": chat, "text": text, "parse_mode": "HTML",
+                                "disable_web_page_preview": True}, timeout=20)
+        if r.status_code != 200:
+            log(f"  Telegram error {r.status_code}: {r.text[:200]}")
+        return r.status_code == 200
+    except Exception as e:  # noqa: BLE001
+        log(f"  Telegram error: {e}")
+        return False
 
-  # ---------- Tamil Nadu ----------
-  - {name: GN Tamil Nadu, type: google_news, lang: en, query: "\"Tamil Nadu\" OR Chennai OR Coimbatore OR Madurai when:1d", section: news, state: TN}
-  - {name: The Hindu Tamil Nadu, type: rss, url: "https://www.thehindu.com/news/national/tamil-nadu/feeder/default.rss", section: news, state: TN}
 
-  # ---------- Tech & Business ----------
-  - {name: Inshorts Business, type: inshorts, category: business, section: biz}
-  - {name: Inshorts Technology, type: inshorts, category: technology, section: biz}
-  - {name: GN Business India, type: google_news, lang: en, query: "(Sensex OR Nifty OR RBI OR GST OR startup OR layoffs OR IPO) India when:1d", section: biz}
+def _ordinal(n):
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
 
-  # ---------- International ----------
-  - {name: Inshorts World, type: inshorts, category: world, section: news, state: WORLD}
-  - {name: GN World, type: google_news, lang: en, query: "world news when:1d", section: news, state: WORLD}
 
-  # ---------- AI (releases and major announcements only) ----------
-  - {name: Hacker News, type: hackernews, section: ai}
-  - {name: GN AI Launches, type: google_news, lang: en, query: "(OpenAI OR Anthropic OR Google OR Meta OR Microsoft OR Sarvam OR Krutrim) AI (launches OR releases OR unveils OR \"now available\") when:1d", section: ai}
-  - {name: OpenAI News, type: rss, url: "https://openai.com/news/rss.xml", section: ai}
-  - {name: Google AI Blog, type: rss, url: "https://blog.google/technology/ai/rss/", section: ai}
-  - {name: Hugging Face Blog, type: rss, url: "https://huggingface.co/blog/feed.xml", section: ai}
+def _brief(text, limit=260):
+    """First two sentences of the summary, kept short."""
+    parts = re.split(r"(?<=[.!?])\s+", (text or "").strip())
+    brief = " ".join(parts[:2]).strip()
+    if len(brief) > limit:
+        brief = brief[:limit].rsplit(" ", 1)[0] + "…"
+    return brief
 
-  # ---------- AI Hacks (shown on the page only, not in Telegram) ----------
-  - {name: r/ChatGPT, type: reddit, subreddit: ChatGPT, sort: top, section: ai}
-  - {name: GN AI Tips, type: google_news, lang: en, query: "(ChatGPT OR Gemini OR Claude) (tips OR tricks OR hack OR prompt) when:2d", section: ai}
+
+def _bullet(s, show_brief=True):
+    e = html.escape
+    item = s["items"][0] if s.get("items") else {}
+    link = item.get("link", "")
+    source = (item.get("source") or "Source").split(" / ")[-1]
+    if not show_brief:
+        if link:
+            return f'• <a href="{e(link, quote=True)}">{e(s["title"])}</a>'
+        return f"• {e(s['title'])}"
+    text = f"• <b>{e(s['title'])}</b>"
+    brief = _brief(s.get("summary", ""))
+    if brief and brief.lower().rstrip(".") != s["title"].lower().rstrip("."):
+        text += f"\n{e(brief)}"
+    if link:
+        text += f'\n<a href="{e(link, quote=True)}">{e(source)}</a>'
+    return text
+
+
+def pick(stories, cfg, allowed, now=None):
+    """Choose this run's stories: new since last digest, allowed by the rules, within caps."""
+    now = now or time.time()
+    window = cfg.get("window_hours", 16) * 3600
+    caps = cfg.get("caps", {})
+    max_total = cfg.get("max_total", 27)
+    fresh = [s for s in stories.values()
+             if not s.get("sent") and now - s.get("created", 0) <= window and allowed(s)]
+    fresh.sort(key=lambda s: (-s.get("score", 0), -s.get("updated", 0)))
+    picked, total = [], 0
+    for name, key, default_cap, rule in SECTIONS:
+        cap = min(caps.get(key, default_cap), max_total - total)
+        chosen = [s for s in fresh if rule(s)][:max(cap, 0)]
+        if chosen:
+            picked.append((name, chosen))
+            total += len(chosen)
+    return picked
+
+
+def build_messages(picked, site_url, now=None, show_brief=True):
+    now = now or dt.datetime.now(IST)
+    label = "Morning" if now.hour < 12 else "Evening"
+    date = f"{now.strftime('%b')} {_ordinal(now.day)}, {now.year}"
+    blocks = [f"<b>{label} Highlights - {date}</b>\n" + "-" * 40]
+    for name, chosen in picked:
+        blocks.append(f"<b>{name}</b>\n" + ("\n\n" if show_brief else "\n").join(
+            _bullet(s, show_brief) for s in chosen))
+    if site_url:
+        blocks.append(f'<a href="{html.escape(site_url, quote=True)}">Open the full news page</a>')
+
+    # Split into messages under Telegram's size limit
+    messages, current = [], ""
+    for block in blocks:
+        parts = [block] if len(block) <= MAX_MESSAGE else block.split("\n\n" if "\n\n" in block else "\n")
+        for part in parts:
+            if current and len(current) + len(part) + 2 > MAX_MESSAGE:
+                messages.append(current)
+                current = ""
+            current = f"{current}\n\n{part}" if current else part
+    if current:
+        messages.append(current)
+    return messages
+
+
+def send_digest(stories, state, cfg, site_url, log, allowed):
+    if not os.environ.get("TELEGRAM_BOT_TOKEN", "").strip() or \
+            not os.environ.get("TELEGRAM_CHAT_ID", "").strip():
+        log("   Telegram not set up: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secret is missing")
+        return
+    picked = pick(stories, cfg, allowed)
+    count = sum(len(c) for _, c in picked)
+    if not count:
+        log("   Nothing new to send")
+        return
+    messages = build_messages(picked, site_url, show_brief=cfg.get("show_brief", True))
+    if all(_send(m, log) for m in messages):
+        for _, chosen in picked:
+            for s in chosen:
+                s["sent"] = True
+        state["last_digest"] = int(time.time())
+        log(f"   Sent digest: {count} stories in {len(messages)} message(s)")
+    else:
+        log("   Digest not fully sent; these stories will be tried again next run")
