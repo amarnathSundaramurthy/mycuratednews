@@ -98,8 +98,15 @@ def fetch_google_news(src):
 
 # ----------------------------------------------------------- Inshorts
 def fetch_inshorts(src):
-    """Unofficial. Tries two known Inshorts addresses; returns [] if both fail."""
-    attempts = [_inshorts_read_api, _inshorts_web_api]
+    """Unofficial. Tries known Inshorts addresses; returns [] if all fail.
+
+    Set `category` in config.yaml (national, business, world, technology...) to get one
+    category; leave it out for top news.
+    """
+    if src.get("category", "all_news") != "all_news":
+        attempts = [_inshorts_web_api, _inshorts_topic_api]
+    else:
+        attempts = [_inshorts_read_api, _inshorts_web_api]
     last_err = None
     for fn in attempts:
         try:
@@ -138,7 +145,16 @@ def _inshorts_read_api(src):
 
 
 def _inshorts_web_api(src):
-    url = "https://inshorts.com/api/en/news?category=all_news&max_limit=60&include_card_data=true"
+    cat = src.get("category", "all_news")
+    url = f"https://inshorts.com/api/en/news?category={cat}&max_limit=60&include_card_data=true"
+    data = _get(url).json().get("data", {})
+    objs = [n.get("news_obj", n) for n in data.get("news_list", [])]
+    return [i for i in (_inshorts_obj_to_item(src, o) for o in objs) if i]
+
+
+def _inshorts_topic_api(src):
+    cat = src.get("category", "all_news")
+    url = f"https://inshorts.com/api/en/search/trending_topics/{cat}?page=1&type=NEWS_CATEGORY"
     data = _get(url).json().get("data", {})
     objs = [n.get("news_obj", n) for n in data.get("news_list", [])]
     return [i for i in (_inshorts_obj_to_item(src, o) for o in objs) if i]
