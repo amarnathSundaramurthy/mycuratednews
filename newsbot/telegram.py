@@ -14,6 +14,9 @@ IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 MAX_MESSAGE = 3900  # Telegram allows 4096 characters per message; keep a safety margin
 
 # (heading, cap key in config, default cap, rule that picks the stories)
+EMOJI = {"Karnataka": "📍", "Tamil Nadu": "🛕", "India": "🇮🇳",
+         "Tech & Business": "💼", "International": "🌍"}
+
 SECTIONS = [
     ("Karnataka", "karnataka", 8,
      lambda s: s["section"] == "news" and s.get("state") == "KA"),
@@ -43,12 +46,6 @@ def _send(text, log):
         return False
 
 
-def _ordinal(n):
-    if 11 <= n % 100 <= 13:
-        return f"{n}th"
-    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
-
-
 def _brief(text, limit=260):
     """First two sentences of the summary, kept short."""
     parts = re.split(r"(?<=[.!?])\s+", (text or "").strip())
@@ -65,14 +62,14 @@ def _bullet(s, show_brief=True):
     source = (item.get("source") or "Source").split(" / ")[-1]
     if not show_brief:
         if link:
-            return f'• <a href="{e(link, quote=True)}">{e(s["title"])}</a>'
-        return f"• {e(s['title'])}"
-    text = f"• <b>{e(s['title'])}</b>"
+            return f'▪️ <a href="{e(link, quote=True)}">{e(s["title"])}</a>'
+        return f"▪️ {e(s['title'])}"
+    text = f"▪️ <b>{e(s['title'])}</b>"
     brief = _brief(s.get("summary", ""))
     if brief and brief.lower().rstrip(".") != s["title"].lower().rstrip("."):
         text += f"\n{e(brief)}"
     if link:
-        text += f'\n<a href="{e(link, quote=True)}">{e(source)}</a>'
+        text += f'\n↗ <a href="{e(link, quote=True)}">{e(source)}</a>'
     return text
 
 
@@ -97,14 +94,15 @@ def pick(stories, cfg, allowed, now=None):
 
 def build_messages(picked, site_url, now=None, show_brief=True):
     now = now or dt.datetime.now(IST)
-    label = "Morning" if now.hour < 12 else "Evening"
-    date = f"{now.strftime('%b')} {_ordinal(now.day)}, {now.year}"
-    blocks = [f"<b>{label} Highlights - {date}</b>\n" + "-" * 40]
+    edition = "🌅 Morning edition" if now.hour < 12 else "🌆 Evening edition"
+    date = f"{now.strftime('%A')}, {now.day} {now.strftime('%B %Y')}"
+    blocks = [f"📰 <b>News Highlights</b>\n<i>{date}  ·  {edition}</i>"]
     for name, chosen in picked:
-        blocks.append(f"<b>{name}</b>\n" + ("\n\n" if show_brief else "\n").join(
+        heading = f"{EMOJI.get(name, '•')} <b>{html.escape(name.upper())}</b>"
+        blocks.append(heading + "\n\n" + ("\n\n" if show_brief else "\n").join(
             _bullet(s, show_brief) for s in chosen))
     if site_url:
-        blocks.append(f'<a href="{html.escape(site_url, quote=True)}">Open the full news page</a>')
+        blocks.append(f'🌐 <a href="{html.escape(site_url, quote=True)}">See all the news</a>')
 
     # Split into messages under Telegram's size limit
     messages, current = [], ""
@@ -114,7 +112,7 @@ def build_messages(picked, site_url, now=None, show_brief=True):
             if current and len(current) + len(part) + 2 > MAX_MESSAGE:
                 messages.append(current)
                 current = ""
-            current = f"{current}\n\n{part}" if current else part
+            current = f"{current}\n\n\n{part}" if current else part
     if current:
         messages.append(current)
     return messages
