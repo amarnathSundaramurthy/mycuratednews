@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>South India News Desk</title>
+<meta name="theme-color" content="#16130f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f2ea; --card: #fffdf8; --ink: #1d1a16; --muted: #6d655a; --line: #e4dccd;
+    --accent: #b4441c; --accent-soft: #f6e2d6; --new: #1f7a4d; --new-soft: #dcf1e5;
+    --upd: #8a5a00; --upd-soft: #f7ead0; --chip: #efe8da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16130f; --card: #201c17; --ink: #f1ebe1; --muted: #a59b8c; --line: #352f27;
+      --accent: #ec7a4a; --accent-soft: #3a2519; --new: #5fd096; --new-soft: #183326;
+      --upd: #e8b85c; --upd-soft: #352a14; --chip: #2b261f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16130f; --card: #201c17; --ink: #f1ebe1; --muted: #a59b8c; --line: #352f27;
+    --accent: #ec7a4a; --accent-soft: #3a2519; --new: #5fd096; --new-soft: #183326;
+    --upd: #e8b85c; --upd-soft: #352a14; --chip: #2b261f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 Inter, system-ui, sans-serif; }
+  header { padding: 22px 16px 10px; max-width: 880px; margin: 0 auto; }
+  h1 { font: 700 28px/1.1 Fraunces, Georgia, serif; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+  nav { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .tabs { max-width: 880px; margin: 0 auto; padding: 8px 16px; display: flex; gap: 6px; overflow-x: auto;
+          scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+         border-radius: 999px; padding: 6px 12px; font: 500 13px Inter, sans-serif; cursor: pointer; }
+  .tab .n { color: var(--muted); margin-left: 4px; font-size: 12px; }
+  .tab .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--new);
+              margin-left: 5px; vertical-align: middle; }
+  .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .tab[aria-selected="true"] .n { color: inherit; opacity: .7; }
+  .bar { max-width: 880px; margin: 0 auto; padding: 10px 16px 0; display: flex; gap: 12px;
+         align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .bar label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .bar button { border: 1px solid var(--line); background: var(--card); color: var(--ink);
+                border-radius: 8px; padding: 4px 10px; font: 500 12px Inter, sans-serif; cursor: pointer; }
+  main { max-width: 880px; margin: 0 auto; padding: 12px 16px 60px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          padding: 14px 16px; margin-bottom: 10px; }
+  .card.trend { border-left: 4px solid var(--accent); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+  .chip { font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+          padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--muted); }
+  .chip.hot { background: var(--accent-soft); color: var(--accent); }
+  .chip.new { background: var(--new-soft); color: var(--new); }
+  .chip.upd { background: var(--upd-soft); color: var(--upd); }
+  .time { font-size: 12px; color: var(--muted); margin-left: auto; }
+  h2 { font: 600 18px/1.3 Fraunces, Georgia, serif; margin: 2px 0 6px; }
+  h2 a { color: inherit; text-decoration: none; }
+  h2 a:hover { text-decoration: underline; }
+  p { margin: 0 0 8px; }
+  .tip { background: var(--new-soft); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-bottom: 8px; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  details ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+  details li { margin-bottom: 4px; }
+  details a { color: var(--ink); }
+  .src { color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 50px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>South India <span>News Desk</span></h1>
+  <div class="meta"><span id="updated">Loading…</span><span id="ainote"></span></div>
+</header>
+<nav><div class="tabs" id="tabs" role="tablist"></div></nav>
+<div class="bar">
+  <label><input type="checkbox" id="onlyNew"> Show only new / updated</label>
+  <button id="markRead" type="button">Mark all as read</button>
+  <button id="theme" type="button">Light / dark</button>
+</div>
+<main id="list"></main>
+
+<script>
+const TABS = [
+  ["all", "All"], ["trending", "🔥 Trending"], ["KA", "Karnataka"], ["TN", "Tamil Nadu"],
+  ["TG", "Telangana"], ["AP", "Andhra Pradesh"], ["KL", "Kerala"], ["IN", "National"],
+  ["ai_buzz", "AI Buzz"], ["ai_hacks", "AI Hacks"]
+];
+const LABEL = Object.fromEntries(TABS);
+LABEL.IN = "National";
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+
+let data = { stories: [] };
+let tab = store.get("tab") || "all";
+let lastRead = Number(store.get("lastRead") || 0);
+const onlyNew = document.getElementById("onlyNew");
+onlyNew.checked = store.get("onlyNew") === "1";
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function ago(ts) {
+  const m = Math.round((Date.now() / 1000 - ts) / 60);
+  if (m < 1) return "just now";
+  if (m < 60) return m + " min ago";
+  const h = Math.round(m / 60);
+  return h < 24 ? h + " h ago" : Math.round(h / 24) + " d ago";
+}
+const ist = ts => new Date(ts * 1000).toLocaleString("en-IN",
+  { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit", day: "numeric", month: "short" });
+
+function status(s) {
+  if (!lastRead) return null;
+  if (s.created > lastRead) return "new";
+  if (s.updated > lastRead) return "upd";
+  return null;
+}
+
+function inTab(s, t) {
+  if (t === "all") return true;
+  if (t === "trending") return s.trending;
+  return s.tab === t;
+}
+
+function renderTabs() {
+  const el = document.getElementById("tabs");
+  el.innerHTML = TABS.map(([id, name]) => {
+    const list = data.stories.filter(s => inTab(s, id));
+    const fresh = list.some(s => status(s));
+    return `<button class="tab" role="tab" data-tab="${id}" aria-selected="${id === tab}">` +
+      `${esc(name)}<span class="n">${list.length}</span>${fresh ? '<span class="dot"></span>' : ""}</button>`;
+  }).join("");
+  el.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+    tab = b.dataset.tab; store.set("tab", tab); render();
+  });
+}
+
+function card(s) {
+  const st = status(s);
+  const first = s.items[0] || {};
+  const chips = [
+    s.trending ? '<span class="chip hot">Trending</span>' : "",
+    st === "new" ? '<span class="chip new">New</span>' : "",
+    st === "upd" ? '<span class="chip upd">Updated</span>' : "",
+    `<span class="chip">${esc(LABEL[s.tab] || s.tab)}</span>`,
+    `<span class="chip">${s.n_sources} source${s.n_sources > 1 ? "s" : ""}</span>`
+  ].join("");
+  const links = s.items.map(i =>
+    `<li><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a> ` +
+    `<span class="src">— ${esc(i.source)}, ${ist(i.ts)}</span></li>`).join("");
+  return `<article class="card${s.trending ? " trend" : ""}">
+    <div class="row">${chips}<span class="time">${ago(s.updated)}</span></div>
+    <h2><a href="${esc(first.link)}" target="_blank" rel="noopener">${esc(s.title)}</a></h2>
+    ${s.summary ? `<p>${esc(s.summary)}</p>` : ""}
+    ${s.tip ? `<div class="tip">💡 ${esc(s.tip)}</div>` : ""}
+    <details><summary>${s.items.length} article${s.items.length > 1 ? "s" : ""}</summary><ul>${links}</ul></details>
+  </article>`;
+}
+
+function render() {
+  renderTabs();
+  let list = data.stories.filter(s => inTab(s, tab));
+  if (onlyNew.checked) list = list.filter(s => status(s));
+  if (tab !== "trending") list.sort((a, b) => (b.trending - a.trending) || (b.score - a.score) || (b.updated - a.updated));
+  document.getElementById("list").innerHTML = list.length ? list.map(card).join("") :
+    `<div class="empty">${onlyNew.checked ? "Nothing new since your last visit." : "No stories here yet."}</div>`;
+}
+
+async function load() {
+  try {
+    const r = await fetch("data.json?t=" + Date.now(), { cache: "no-store" });
+    data = await r.json();
+    document.getElementById("updated").textContent = "Updated " + ago(data.generated) + " (" + ist(data.generated) + " IST)";
+    document.getElementById("ainote").textContent = "· " + (data.ai_note || "");
+  } catch (e) {
+    document.getElementById("updated").textContent = "Could not load news yet. The first run may still be going.";
+  }
+  render();
+}
+
+onlyNew.onchange = () => { store.set("onlyNew", onlyNew.checked ? "1" : "0"); render(); };
+document.getElementById("markRead").onclick = () => {
+  lastRead = Math.floor(Date.now() / 1000); store.set("lastRead", String(lastRead)); render();
+};
+document.getElementById("theme").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark"; store.set("theme", root.dataset.theme);
+};
+if (store.get("theme")) document.documentElement.dataset.theme = store.get("theme");
+
+// NEW / UPDATED labels compare against your previous visit on this device.
+// The first visit ever treats everything as already read.
+const nowSec = Math.floor(Date.now() / 1000);
+lastRead = Number(store.get("lastRead") || nowSec);
+store.set("lastRead", String(nowSec));
+load();
+setInterval(load, 10 * 60 * 1000);
+</script>
+</body>
+</html>
