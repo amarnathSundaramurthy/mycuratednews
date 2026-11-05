@@ -5,8 +5,9 @@ import time
 
 from rapidfuzz import fuzz
 
-STATES = {"KA", "TN", "TG", "AP", "KL", "IN"}
-SECTIONS = {"news", "ai_buzz", "ai_hacks"}
+STATES = {"KA", "TN", "TG", "AP", "KL", "IN", "WORLD"}
+SECTIONS = {"news", "biz", "ai_buzz", "ai_hacks"}
+LOW_PRIORITY_STATES = {"TG", "AP", "KL"}  # only very big, non-political news from these
 
 # Simple keyword lists used when the AI is not available
 STATE_WORDS = {
@@ -17,6 +18,53 @@ STATE_WORDS = {
     "AP": r"andhra pradesh|vijayawada|visakhapatnam|vizag|amaravati|tirupati|guntur|ఆంధ్ర",
     "KL": r"kerala|kochi|thiruvananthapuram|kozhikode|thrissur|കേരള|കൊച്ചി",
 }
+# ---- Filter rules (used as a backup when the AI is busy, and as a final check) ----
+SPORTS = re.compile(
+    r"\b(cricket|cricketer|odi|odis|t20|t20i|ipl|wpl|test match|wickets?|innings|football|"
+    r"footballer|fifa|uefa|ucl|premier league|la liga|hockey|tennis|badminton|shuttler|bwf|"
+    r"olympics?|wushu|kabaddi|chess|grandmaster|formula 1|f1|grand prix|athletics|athlete|"
+    r"boxer|boxing|wrestler|wrestling|world cup|medal|goalkeeper|striker|bcci|icc|isl|pkl)\b",
+    re.I)
+# Internal politics / schemes / development news (dropped for TG, AP, KL)
+POLITICS = re.compile(
+    r"\b(minister|ministers|mlas?|mps?|cm|chief minister|party|bjp|congress|tdp|ysrcp|brs|"
+    r"jana sena|cpi|cpm|ldf|udf|nda|elections?|polls?|by-?polls?|assembly|cabinet|govt|"
+    r"government|schemes?|projects?|inaugurat\w*|foundation stone|development|"
+    r"infrastructure|budget|welfare|metro|corporation|council|tender)\b", re.I)
+# Signs that a TG/AP/KL story is really big
+DISASTER = re.compile(
+    r"\b(killed|kills|dead|deaths?|died|dies|floods?|cyclone|earthquake|landslide|blast|"
+    r"explosion|fire|red alert|orange alert|warnings?|stampede|crash|collapse|derail\w*|"
+    r"terror|attack|tsunami|heavy rain|evacuat\w*)\b", re.I)
+# AI news: keep releases and major announcements, drop "working on / plans" news
+AI_RELEASE = re.compile(
+    r"\b(launch\w*|release\w*|rolls? out|rolled out|now available|available|unveil\w*|"
+    r"introduc\w*|debut\w*|ships|shipped|open-?sourced?|acquir\w*|acquisition|raises|raised|"
+    r"funding|valuation|pric\w*|outage|breach|leak\w*|bans?|banned|lawsuit|sues|sued|"
+    r"fined|partnership|deal|announces|announced)\b", re.I)
+AI_PLANS = re.compile(
+    r"\b(working on|plans?|planning|developing|could|may|might|close to|research|researchers|"
+    r"study|paper|warns?|future|soon|coming|teases?|rumou?rs?|reportedly|predicts?|expects?|"
+    r"vision|roadmap|aims?)\b", re.I)
+
+
+def allowed(s):
+    """Final check before a story reaches Telegram or the page."""
+    title = s.get("title", "")
+    text = title + " " + s.get("summary", "")
+    if SPORTS.search(title):
+        return False
+    state = s.get("state")
+    if s["section"] == "news" and state in (None, "IN"):
+        state = guess_state(title) or state  # a national feed may carry TG/AP/KL news
+    if s["section"] == "news" and state in LOW_PRIORITY_STATES:
+        big = s.get("big") or (s.get("n_sources", 1) >= 3 and DISASTER.search(text))
+        return bool(big) and not POLITICS.search(title)
+    if s["section"] == "ai_buzz" and AI_PLANS.search(title) and not AI_RELEASE.search(title):
+        return False
+    return True
+
+
 HACK_WORDS = re.compile(r"\b(tip|tips|trick|tricks|hack|hacks|how i|how to|prompt|"
                         r"workflow|guide|use case|cheat ?sheet)\b", re.I)
 
@@ -59,8 +107,8 @@ def new_story_id():
 
 
 # ------------------------------------------------------------- AI grouping
-SYSTEM = """You are a news desk editor for an Indian news dashboard focused on South India
-(Karnataka, Tamil Nadu, Telangana, Andhra Pradesh, Kerala) plus national news and AI.
+SYSTEM = """You are a news desk editor for an Indian news dashboard focused on Karnataka
+(especially Bengaluru) and Tamil Nadu, plus national, world, business and AI news.
 Articles may be in English, Kannada, Tamil, Telugu or Malayalam. Always answer in English.
 Reply with JSON only."""
 
@@ -76,18 +124,27 @@ Tasks:
    Articles in different languages about the same event belong to the same story.
 2. For each article give:
    state: KA, TN, TG, AP, KL (main South Indian state involved), IN (national/other India),
-          or OTHER (not about India and not AI).
-   section: "news" for normal news; "ai_buzz" for AI releases, research, company or policy news;
+          or WORLD (outside India).
+   section: "news" for normal news;
+            "biz" for business, economy, markets, companies and tech industry news (not AI);
+            "ai_buzz" ONLY for AI products or models that were released or launched, and major
+              AI announcements (big deals, funding, acquisitions, pricing, outages, regulation).
+              AI research, plans, "working on", predictions or opinions -> "skip";
             "ai_hacks" for practical tips, tricks, prompts or workflows people share for using AI;
-            "skip" for ads, horoscopes, quizzes, spam, or content with no news value.
+            "skip" for ALL sports news, ads, horoscopes, quizzes, spam, or no news value.
+   Telangana, Andhra Pradesh and Kerala: use "skip" unless the event is very big (major
+   disaster, several deaths, national security, or affects people across India). Always
+   "skip" their internal politics, government schemes, development or infrastructure news.
 3. For every NEW story and every existing story that got new articles, write:
    title: short clear English headline (max 14 words)
    summary: 2-3 plain English sentences, facts only
    tip: only for ai_hacks - the actual tip in one or two lines; otherwise ""
+   big: true only for very big events (major disaster, several deaths, national security,
+        or news affecting people across India); otherwise false
 
 JSON format:
 {{"articles": [{{"n": 1, "story": "N1", "state": "KA", "section": "news"}}],
-  "stories": [{{"story": "N1", "title": "...", "summary": "...", "tip": ""}}]}}"""
+  "stories": [{{"story": "N1", "title": "...", "summary": "...", "tip": "", "big": false}}]}}"""
 
 
 def _hint(it):
@@ -137,10 +194,14 @@ def group_simple(batch, stories):
         else:
             sid = f"T{n}"
             pool.append((sid, title))
-        state = it["state"] or guess_state(it["title"] + " " + it["summary"]) or "IN"
+        state = it["state"]
+        if state in (None, "IN"):
+            state = guess_state(it["title"] + " " + it["summary"]) or state or "IN"
         section = it["section"]
         if section == "ai":
             section = "ai_hacks" if HACK_WORDS.search(it["title"]) else "ai_buzz"
+        if SPORTS.search(it["title"]):
+            section = "skip"
         result.append((it, sid, state, section, None))
     return result
 
@@ -150,14 +211,17 @@ def merge(results, stories, used_ai):
     now = int(time.time())
     temp_ids = {}
     for it, sid, state, section, text in results:
-        if section == "skip" or state == "OTHER" and section == "news":
+        if section in ("skip", "sports"):
             continue
+        if state == "OTHER":
+            state = "WORLD"
         if section not in SECTIONS:
-            section = "news" if it["section"] == "news" else "ai_buzz"
+            section = it["section"] if it["section"] in SECTIONS else (
+                "news" if it["section"] == "news" else "ai_buzz")
         if section != "news":
             state = None
         elif state not in STATES:
-            state = it["state"] or "IN"
+            state = it["state"] if it["state"] in STATES else "IN"
 
         if sid in stories:
             s = stories[sid]
@@ -166,7 +230,7 @@ def merge(results, stories, used_ai):
         else:
             s = {"id": new_story_id(), "title": it["title"], "summary": it["summary"],
                  "tip": "", "state": state, "section": section, "created": now,
-                 "updated": now, "items": [], "alerted": False, "ai": used_ai}
+                 "updated": now, "items": [], "sent": False, "big": False, "ai": used_ai}
             stories[s["id"]] = s
             if sid:
                 temp_ids[sid] = s["id"]
@@ -178,6 +242,7 @@ def merge(results, stories, used_ai):
             s["title"] = (text.get("title") or s["title"])[:200]
             s["summary"] = (text.get("summary") or s["summary"])[:700]
             s["tip"] = (text.get("tip") or s.get("tip", ""))[:400]
+            s["big"] = bool(text.get("big")) or s.get("big", False)
             s["ai"] = True
         elif not s["summary"]:
             s["summary"] = it["summary"]
