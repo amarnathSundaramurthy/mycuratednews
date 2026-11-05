@@ -1,4 +1,4 @@
-"""Runs one full cycle: collect -> keep only new -> group -> score -> save -> alert.
+"""Runs one full cycle: collect -> keep only new -> group -> score -> digest -> save.
 
 Run it with:  python -m newsbot.main
 """
@@ -80,7 +80,8 @@ def run(config_path=ROOT / "config.yaml", collected=None):
         st.score(s)
 
     log("5) Telegram")
-    telegram.run_alerts(stories, state, settings.get("telegram", {}), site_url(), log)
+    telegram.send_digest(stories, state, settings.get("telegram", {}), site_url(), log,
+                         st.allowed)
 
     log("6) Saving")
     now = int(time.time())
@@ -96,6 +97,8 @@ def run(config_path=ROOT / "config.yaml", collected=None):
     trending_min = settings.get("trending_min_sources", 3)
     public = []
     for s in sorted(stories.values(), key=lambda s: (-s["score"], -s["updated"])):
+        if not st.allowed(s):
+            continue
         items_sorted = sorted(s["items"], key=lambda x: -x["ts"])
         public.append({
             "id": s["id"], "title": s["title"], "summary": s["summary"], "tip": s.get("tip", ""),
