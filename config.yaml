@@ -25,6 +25,8 @@ settings:
     # Every run sends one digest with only the stories not sent before.
     # Only stories first seen in the last this-many hours are considered.
     window_hours: 16
+    # Show a 2-line brief and a source link under each headline (false = headlines only)
+    show_brief: true
     # Most stories in one digest
     max_total: 27
     # Most stories per section
